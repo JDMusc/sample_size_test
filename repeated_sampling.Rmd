@@ -1,0 +1,68 @@
+---
+title: "Repeat Sampling"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This markdown empirically highlights the problem with drawing conclusions (or inference) through repeated sampling of the same dataset.
+
+
+Both models are drawn randomly from the same distribution
+```{r}
+model1 = rnorm(500)
+model2 = rnorm(500)
+```
+
+There is a slight difference in means.
+```{r}
+(c(mean(model1), mean(model2)))
+```
+
+Let's sample from the models and calculate the mean for each sample
+```{r}
+n_samples = 1000
+sample_size = 200
+sample_mean_fn = function(arr) mean(sample(arr, sample_size))
+
+mns1 = sapply(1:n_samples, function(x) sample_mean_fn(model1))
+mns2 = sapply(1:n_samples, function(x) sample_mean_fn(model2))
+```
+
+
+We see the plot rapidly becomes statistically significant (a y-axis value of 1.3 corresponds to a p-value of .05), even though both models are drawn from the same population. This is because the t-test assumes independence between samples. However, the samples are continually drawn from the same 2 datasets. Therefore, they are not independent. The t-test is "fooled" into thinking the small effects are significant.
+```{r}
+plot(2:n_samples, 
+     sapply(2:n_samples, function(i) 
+       -log10(t.test(mns1[1:i], mns2[1:i])$p.value)), 
+     ylab = '-log p-value', 
+     xlab = '# experiments')
+```
+
+What about the non-parametric Wilcoxon rank test?
+
+We will see the same result. It's not an issue of parameters.
+```{r}
+plot(2:n_samples, 
+     sapply(2:n_samples, function(i) 
+       -log10(wilcox.test(mns1[1:i], mns2[1:i])$p.value)), 
+     ylab = '-log p-value', 
+     xlab = '# experiments')
+```
+
+However, the distribution of means shows significant overlap.
+```{r}
+library(tidyverse)
+model1_df = data.frame(mean = mns1, model = "model1")
+model2_df = data.frame(mean = mns2, model = "model2")
+rbind(model1_df, model2_df) %>% 
+  ggplot(aes(x=mean)) + 
+  geom_histogram(aes(color = model, fill=model, y = ..density..)) + 
+  geom_density() +
+  facet_grid(. ~ model)
+```
+
